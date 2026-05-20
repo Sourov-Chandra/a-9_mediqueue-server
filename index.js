@@ -53,6 +53,26 @@ async function run() {
       res.send(result);
     });
 
+    app.post("/bookings", async (req, res) => {
+      const booking = req.body;
+      const tutor = await tutorsCollection.findOne({
+        _id: new ObjectId(booking.tutorId),
+      });
+
+      if (!tutor || tutor.totalSlot === 0) {
+        return res.status(400).send({ message: "No slots available" });
+      }
+
+      const result = await bookingsCollection.insertOne(booking);
+
+      await tutorsCollection.updateOne(
+        { _id: new ObjectId(booking.tutorId) },
+        { $inc: { totalSlot: -1 } },
+      );
+
+      res.send(result);
+    });
+
   } finally {
   }
 }
