@@ -2,8 +2,13 @@ require("dotenv").config();
 const express = require("express");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 const app = express();
 const port = process.env.PORT || 5000;
+const cookieParser = require("cookie-parser");
+const verifyToken = require("./middleware/verifyToken");
+
+app.use(cookieParser());
 
 app.use(
   cors({
@@ -20,6 +25,8 @@ const client = new MongoClient(process.env.MONGODB_URI, {
     deprecationErrors: true,
   },
 });
+
+
 
 async function run() {
   try {
@@ -44,27 +51,26 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/tutors/:id", async (req, res) => {
+    app.get("/tutors/:id", verifyToken, async (req, res) => {
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
       const result = await tutorsCollection.findOne(query);
       res.send(result);
     });
 
-    app.post("/tutors", async (req, res) => {
+    app.post("/tutors", verifyToken, async (req, res) => {
       const tutor = req.body;
       const result = await tutorsCollection.insertOne(tutor);
       res.send(result);
     });
 
-    app.get("/my-tutors", async (req, res) => {
-      const { email } = req.query;
-      const query = email ? { email } : {};
-      const result = await tutorsCollection.find(query).toArray();
+    app.get("/my-tutors", verifyToken, async (req, res) => {
+      const email = req.user.email; 
+      const result = await tutorsCollection.find({ email }).toArray();
       res.send(result);
     });
 
-    app.delete("/tutors/:id", async (req, res) => {
+    app.delete("/tutors/:id", verifyToken, async (req, res) => {
       const { id } = req.params;
       const result = await tutorsCollection.deleteOne({
         _id: new ObjectId(id),
@@ -72,7 +78,7 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/tutors/:id", async (req, res) => {
+    app.patch("/tutors/:id", verifyToken, async (req, res) => {
       const { id } = req.params;
       const updatedTutor = req.body;
       const result = await tutorsCollection.updateOne(
@@ -82,7 +88,7 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/bookings", async (req, res) => {
+    app.post("/bookings", verifyToken, async (req, res) => {
       const booking = req.body;
 
       const alreadyBooked = await bookingsCollection.findOne({
@@ -112,6 +118,66 @@ async function run() {
       );
 
       res.send(result);
+    });
+
+    app.get("/bookings", verifyToken, async (req, res) => {
+      const email = req.query.email;
+      const query = { studentEmail: email }; 
+      const result = await bookingsCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    app.patch("/bookings/:id", verifyToken, async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!id || id === "undefined") {
+          return res
+            .status(400)
+            .send({ error: "Missing or invalid booking ID parameter" });
+        }
+
+        const result = await bookingsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { status } },
+        );
+
+        if (result.matchedCount === 0) {
+          return res
+            .status(404)
+            .send({ error: "No booking found with that ID" });
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error("Backend PATCH error:", error);
+        res
+          .status(500)
+          .send({ error: "Internal server error during cancellation update" });
+      }
+    });
+
+    app.post("/jwt", (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: "7d" });
+      res
+        .cookie("token", token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+        })
+        .send({ success: true });
+    });
+
+    app.post("/jwt/logout", (req, res) => {
+      res
+        .clearCookie("token", {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+        })
+        .send({ success: true });
     });
   } finally {
   }
