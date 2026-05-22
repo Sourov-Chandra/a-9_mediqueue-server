@@ -33,7 +33,6 @@ const client = new MongoClient(process.env.MONGODB_URI, {
 
 async function run() {
   try {
-
     const db = client.db("mediqueue");
     const tutorsCollection = db.collection("tutors");
     const bookingsCollection = db.collection("bookings");
@@ -51,6 +50,39 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/tutors/search", async (req, res) => {
+      try {
+        const { search, startDate, endDate } = req.query;
+        const filter = {};
+
+        if (search && search.trim()) {
+          filter.name = { $regex: search.trim(), $options: "i" };
+        }
+
+        if (startDate || endDate) {
+          const dateFilter = {};
+
+          if (startDate) {
+            dateFilter.$gte = startDate;
+          }
+          if (endDate) {
+            dateFilter.$lte = endDate;
+          }
+
+          filter.registrationDate = dateFilter; 
+          // filter.createdAt = dateFilter;    
+       
+        }
+
+        console.log("Filter:", filter);
+
+        const result = await tutorsCollection.find(filter).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error:", error);
+        res.status(500).send({ error: error.message });
+      }
+    });
     app.get("/tutors/:id", async (req, res) => {
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
@@ -65,7 +97,7 @@ async function run() {
     });
 
     app.get("/my-tutors", verifyToken, async (req, res) => {
-      const email = req.user.email; 
+      const email = req.user.email;
       const result = await tutorsCollection.find({ email }).toArray();
       res.send(result);
     });
@@ -122,7 +154,7 @@ async function run() {
 
     app.get("/bookings", verifyToken, async (req, res) => {
       const email = req.query.email;
-      const query = { studentEmail: email }; 
+      const query = { studentEmail: email };
       const result = await bookingsCollection.find(query).toArray();
       res.send(result);
     });
@@ -158,7 +190,6 @@ async function run() {
       }
     });
 
-
     app.post("/jwt", (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: "7d" });
@@ -166,9 +197,8 @@ async function run() {
     });
 
     app.post("/jwt/logout", (req, res) => {
-      res.send({ success: true }); 
+      res.send({ success: true });
     });
-
   } finally {
   }
 }
