@@ -4,7 +4,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT;
 const cookieParser = require("cookie-parser");
 const verifyToken = require("./middleware/verifyToken");
 
@@ -12,7 +12,10 @@ app.use(cookieParser());
 
 app.use(
   cors({
-    origin: [process.env.NEXT_PUBLIC_APP_URL],
+    origin: [
+      "http://localhost:3000",
+      "https://mediqueue-orcin.vercel.app",
+    ],
     credentials: true,
   }),
 );
@@ -30,14 +33,11 @@ const client = new MongoClient(process.env.MONGODB_URI, {
 
 async function run() {
   try {
-    await client.connect();
 
     const db = client.db("mediqueue");
     const tutorsCollection = db.collection("tutors");
     const bookingsCollection = db.collection("bookings");
 
-    // Send a ping to confirm a successful connection
-    // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!",
     );
@@ -51,7 +51,7 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/tutors/:id", verifyToken, async (req, res) => {
+    app.get("/tutors/:id", async (req, res) => {
       const { id } = req.params;
       const query = { _id: new ObjectId(id) };
       const result = await tutorsCollection.findOne(query);
@@ -158,27 +158,17 @@ async function run() {
       }
     });
 
+
     app.post("/jwt", (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: "7d" });
-      res
-        .cookie("token", token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
-        })
-        .send({ success: true });
+      res.send({ success: true, token });
     });
 
     app.post("/jwt/logout", (req, res) => {
-      res
-        .clearCookie("token", {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
-        })
-        .send({ success: true });
+      res.send({ success: true }); 
     });
+
   } finally {
   }
 }
